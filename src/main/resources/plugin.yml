@@ -1,0 +1,9 @@
+name: ProjectX_Cook
+version: '1.0-SNAPSHOT'
+main: com.projectX.Cook
+api-version: '1.21'
+
+commands:
+  open_cooking_interface:
+    description: Opens the cooking GUI
+    usage: /open_cooking_interface
