@@ -4,7 +4,11 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.title.Title
 import org.bukkit.Bukkit
+import org.bukkit.Location
 import org.bukkit.Sound
+import org.bukkit.boss.BarColor
+import org.bukkit.boss.BarStyle
+import org.bukkit.boss.BossBar
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
@@ -16,7 +20,9 @@ import java.time.Duration
 class CookingCompletenessGauge(
     private val player: Player,
     private val resultItem: ItemStack,
-    private val cookingPlayers: MutableSet<Player>
+    private val location: Location,
+    private val onFinish: () -> Unit
+    //private val cookingPlayers: MutableSet<Player>
 ) : BukkitRunnable(), Listener {
 
     private val barLength = 30
@@ -25,6 +31,15 @@ class CookingCompletenessGauge(
     private var stopTickCounter = 0
     private var keepShowingGauge = false
     private var tickCount = 0
+
+    private val bossBar: BossBar = Bukkit.createBossBar(
+        Component.text("요리 완성도 게이지", NamedTextColor.GOLD).toString(),
+        BarColor.YELLOW,
+        BarStyle.SEGMENTED_20
+    ).apply {
+        addPlayer(player)
+        isVisible = true
+    }
 
     override fun run() {
         tickCount++ // 항상 증가
@@ -36,7 +51,10 @@ class CookingCompletenessGauge(
                 return
             }
             player.sendMessage("요리가 끝났습니다!")
-            cookingPlayers.remove(player)
+            bossBar.removePlayer(player)
+            bossBar.isVisible = false
+            onFinish()
+            //cookingPlayers.remove(player)
             this.cancel()
             return
         }
@@ -45,6 +63,9 @@ class CookingCompletenessGauge(
             stopCooking(cursorPosition)
             return
         }
+
+        val progress = cursorPosition.toDouble() / barLength.toDouble()
+        bossBar.progress = progress.coerceIn(0.0, 1.0)
 
         player.sendActionBar(buildGaugeBar(cursorPosition))
         cursorPosition++
@@ -110,6 +131,9 @@ class CookingCompletenessGauge(
         player.sendMessage("완성도 $score% 요리가 완성되었습니다!")
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1f, 1f)
         player.inventory.addItem(result)
+        bossBar.removePlayer(player)
+        bossBar.isVisible = false
+        onFinish()
     }
 
     @EventHandler

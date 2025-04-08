@@ -3,6 +3,7 @@ package com.projectX.cooking
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -16,30 +17,9 @@ import org.bukkit.plugin.Plugin
 
 class Cooking(private val plugin: Plugin) : Listener {
     private val inventoryMap: MutableMap<Inventory, String> = mutableMapOf()
-    private val cookingPlayers: MutableSet<Player> = mutableSetOf()
+    private val activeCookings: MutableMap<Location, CookingCompletenessGauge> = mutableMapOf()
 
-/*    @EventHandler
-    fun onPlayerInteract(event: PlayerInteractEvent) {
-        if (event.action == Action.RIGHT_CLICK_BLOCK) {
-            val clickBlock = event.clickedBlock
-            val player = event.player
-            player.sendMessage(clickBlock?.type.toString())
-
-            if (clickBlock?.type == Material.DIAMOND_BLOCK) {
-                if (cookingPlayers.contains(player)) {
-                    player.sendMessage("이미 요리를 진행 중입니다.")
-                } else {
-                    openCookingInventory(player)
-                }
-            }
-        }
-    }*/
-
-    fun openCookingInventory(player: Player) {
-        if (cookingPlayers.contains(player)) {
-            player.sendMessage("이미 요리를 진행 중입니다.")
-            return
-        }
+    fun openCookingInventory(player: Player, location: Location) {
         val title = Component.text("요리하기")
         val inventory = Bukkit.createInventory(null, 54, title)
 
@@ -55,38 +35,50 @@ class Cooking(private val plugin: Plugin) : Listener {
         inventory.setItem(53, buttonItem)
 
         player.openInventory(inventory)
-        inventoryMap[inventory] = "요리하기"
+        inventoryMap[inventory] = locationToKey(location)
     }
 
     @EventHandler
     fun onInventoryClick(event: InventoryClickEvent) {
         val inventory = event.inventory
-        val title = inventoryMap[inventory]
-        if (title == "요리하기") {
-            val clickedSlot = event.rawSlot
-            val player = event.whoClicked as Player
+        val titleKey = inventoryMap[inventory] ?: return
+        val player = event.whoClicked as Player
+        val clickedSlot = event.rawSlot
+        val location = parseLocationFromKey(titleKey) ?: return
 
-            if (clickedSlot == 52 || clickedSlot == 53) {
-                event.isCancelled = true
-                if (cookingPlayers.contains(player)) {
-                    player.sendMessage("이미 요리를 진행 중입니다.")
-                } else {
-                    val result = processCooking(inventory, player)
-                    if (result != null) {
-                        cookingPlayers.add(player)
-//                        val cookingTime = 10 // 요리 시간(초)
-//                        val cookingProgress = CookingProgress(player, cookingTime, result, cookingPlayers)
-//                        cookingProgress.runTaskTimer(plugin, 0L, 20L)
+        if (clickedSlot == 52 || clickedSlot == 53) {
+            event.isCancelled = true
 
-                        val cookingCompletenessGauge = CookingCompletenessGauge(player, result, cookingPlayers)
-                        Bukkit.getPluginManager().registerEvents(cookingCompletenessGauge, plugin)
-                        cookingCompletenessGauge.runTaskTimer(plugin, 0L, 3L)
-                        player.closeInventory()
-                    } else {
-                        player.sendMessage("레시피가 올바르지 않습니다.")
-                    }
-                }
+            if (activeCookings.containsKey(location)) {
+                player.sendMessage("이미 요리를 진행 중입니다.")
+                return
             }
+
+            val result = processCooking(inventory, player)
+            if (result != null) {
+                val cookingCompletenessGauge = CookingCompletenessGauge(player, result, location) {
+                    activeCookings.remove(location)
+                }
+                activeCookings[location] = cookingCompletenessGauge
+                Bukkit.getPluginManager().registerEvents(cookingCompletenessGauge, plugin)
+                cookingCompletenessGauge.runTaskTimer(plugin, 0L, 3L)
+                player.closeInventory()
+            } else {
+                player.sendMessage("레시피가 올바르지 않습니다.")
+            }
+        }
+    }
+
+    private fun locationToKey(loc: Location): String =
+        "${loc.world?.name}:${loc.blockX},${loc.blockY},${loc.blockZ}"
+
+    private fun parseLocationFromKey(key: String): Location? {
+        return try {
+            val (world, xyz) = key.split(":")
+            val (x, y, z) = xyz.split(",").map { it.toInt() }
+            Location(Bukkit.getWorld(world), x.toDouble(), y.toDouble(), z.toDouble())
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -175,9 +167,5 @@ class Cooking(private val plugin: Plugin) : Listener {
             item.itemMeta = it
         }
         return item
-    }
-
-    fun isCooking(player: Player): Boolean {
-        return cookingPlayers.contains(player)
     }
 }
