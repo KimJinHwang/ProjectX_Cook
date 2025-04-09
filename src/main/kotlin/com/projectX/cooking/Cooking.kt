@@ -1,5 +1,6 @@
 package com.projectX.cooking
 
+import com.nexomc.nexo.api.events.furniture.NexoFurnitureInteractEvent
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
@@ -8,18 +9,34 @@ import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
-import org.bukkit.event.block.Action
 import org.bukkit.event.inventory.InventoryClickEvent
-import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import org.bukkit.plugin.Plugin
 
 class Cooking(private val plugin: Plugin) : Listener {
-    private val inventoryMap: MutableMap<Inventory, String> = mutableMapOf()
+    private val inventoryMap: MutableMap<Inventory, Location> = mutableMapOf()
     private val activeCookings: MutableMap<Location, CookingCompletenessGauge> = mutableMapOf()
 
+    @EventHandler
+    fun onFurnitureInteract(event: NexoFurnitureInteractEvent) {
+        val baseEntity = event.baseEntity
+        event.player.sendMessage("위치0 : ${baseEntity.location}")
+        event.player.sendMessage("${baseEntity.name}와 상호작용 했습니다.")
+        if (baseEntity.name.contains("Chopping Board")) {
+            event.player.sendMessage("위치1 : ${baseEntity.location}")
+            openCookingInventory(event.player, baseEntity.location)
+        }
+    }
+
     fun openCookingInventory(player: Player, location: Location) {
+        player.sendMessage("pos0 : $location")
+        if (activeCookings.containsKey(location)) {
+            return
+        }
+
+        player.sendMessage("pos1 : $location")
+
         val title = Component.text("요리하기")
         val inventory = Bukkit.createInventory(null, 54, title)
 
@@ -35,16 +52,19 @@ class Cooking(private val plugin: Plugin) : Listener {
         inventory.setItem(53, buttonItem)
 
         player.openInventory(inventory)
-        inventoryMap[inventory] = locationToKey(location)
+        player.sendMessage("pos2 : $location")
+        inventoryMap[inventory] = location
+        player.sendMessage("pos3 : ${inventoryMap[inventory]}")
     }
 
     @EventHandler
     fun onInventoryClick(event: InventoryClickEvent) {
         val inventory = event.inventory
-        val titleKey = inventoryMap[inventory] ?: return
+        val location = inventoryMap[inventory] ?: return
         val player = event.whoClicked as Player
         val clickedSlot = event.rawSlot
-        val location = parseLocationFromKey(titleKey) ?: return
+
+        player.sendMessage("실제 위치 : $location")
 
         if (clickedSlot == 52 || clickedSlot == 53) {
             event.isCancelled = true
@@ -61,24 +81,11 @@ class Cooking(private val plugin: Plugin) : Listener {
                 }
                 activeCookings[location] = cookingCompletenessGauge
                 Bukkit.getPluginManager().registerEvents(cookingCompletenessGauge, plugin)
-                cookingCompletenessGauge.runTaskTimer(plugin, 0L, 3L)
+                cookingCompletenessGauge.runTaskTimer(plugin, 0L, 7L)
                 player.closeInventory()
             } else {
                 player.sendMessage("레시피가 올바르지 않습니다.")
             }
-        }
-    }
-
-    private fun locationToKey(loc: Location): String =
-        "${loc.world?.name}:${loc.blockX},${loc.blockY},${loc.blockZ}"
-
-    private fun parseLocationFromKey(key: String): Location? {
-        return try {
-            val (world, xyz) = key.split(":")
-            val (x, y, z) = xyz.split(",").map { it.toInt() }
-            Location(Bukkit.getWorld(world), x.toDouble(), y.toDouble(), z.toDouble())
-        } catch (e: Exception) {
-            null
         }
     }
 
@@ -167,5 +174,13 @@ class Cooking(private val plugin: Plugin) : Listener {
             item.itemMeta = it
         }
         return item
+    }
+
+    fun isCooking(player: Player): Boolean {
+        return activeCookings.values.any { it.player == player }
+    }
+
+    fun isDeviceCooking(location: Location): Boolean {
+        return activeCookings.containsKey(location)
     }
 }

@@ -9,6 +9,7 @@ import org.bukkit.Sound
 import org.bukkit.boss.BarColor
 import org.bukkit.boss.BarStyle
 import org.bukkit.boss.BossBar
+import org.bukkit.entity.ArmorStand
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
@@ -18,11 +19,10 @@ import org.bukkit.scheduler.BukkitRunnable
 import java.time.Duration
 
 class CookingCompletenessGauge(
-    private val player: Player,
+    val player: Player,
     private val resultItem: ItemStack,
     private val location: Location,
     private val onFinish: () -> Unit
-    //private val cookingPlayers: MutableSet<Player>
 ) : BukkitRunnable(), Listener {
 
     private val barLength = 30
@@ -32,29 +32,37 @@ class CookingCompletenessGauge(
     private var keepShowingGauge = false
     private var tickCount = 0
 
-    private val bossBar: BossBar = Bukkit.createBossBar(
-        Component.text("요리 완성도 게이지", NamedTextColor.GOLD).toString(),
-        BarColor.YELLOW,
-        BarStyle.SEGMENTED_20
-    ).apply {
-        addPlayer(player)
-        isVisible = true
+    private lateinit var gaugeStand: ArmorStand
+
+    private fun spawnGaugeStand() {
+        gaugeStand = location.world.spawn(location.clone().add(0.0, 0.3, 0.0),
+            ArmorStand::class.java).apply {
+            isVisible = false
+            setGravity(false)
+            isMarker = false
+            isCustomNameVisible = true
+        }
+    }
+
+    private fun updateGaugeStand(cursor: Int) {
+        gaugeStand.customName(buildGaugeBar(cursor))
     }
 
     override fun run() {
         tickCount++ // 항상 증가
+        if (!::gaugeStand.isInitialized) {
+            spawnGaugeStand()
+        }
 
         if (stopped) {
             if (keepShowingGauge && stopTickCounter < 40) {
-                player.sendActionBar(buildGaugeBar(cursorPosition)) // 계속 깜빡임 유지됨
+                updateGaugeStand(cursorPosition)
                 stopTickCounter++
                 return
             }
             player.sendMessage("요리가 끝났습니다!")
-            bossBar.removePlayer(player)
-            bossBar.isVisible = false
+            gaugeStand.remove()
             onFinish()
-            //cookingPlayers.remove(player)
             this.cancel()
             return
         }
@@ -64,10 +72,7 @@ class CookingCompletenessGauge(
             return
         }
 
-        val progress = cursorPosition.toDouble() / barLength.toDouble()
-        bossBar.progress = progress.coerceIn(0.0, 1.0)
-
-        player.sendActionBar(buildGaugeBar(cursorPosition))
+        updateGaugeStand(cursorPosition)
         cursorPosition++
     }
 
@@ -131,8 +136,7 @@ class CookingCompletenessGauge(
         player.sendMessage("완성도 $score% 요리가 완성되었습니다!")
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1f, 1f)
         player.inventory.addItem(result)
-        bossBar.removePlayer(player)
-        bossBar.isVisible = false
+        gaugeStand.remove()
         onFinish()
     }
 
