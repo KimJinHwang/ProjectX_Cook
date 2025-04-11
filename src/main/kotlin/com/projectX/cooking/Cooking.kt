@@ -21,21 +21,15 @@ class Cooking(private val plugin: Plugin) : Listener {
     @EventHandler
     fun onFurnitureInteract(event: NexoFurnitureInteractEvent) {
         val baseEntity = event.baseEntity
-        event.player.sendMessage("위치0 : ${baseEntity.location}")
-        event.player.sendMessage("${baseEntity.name}와 상호작용 했습니다.")
         if (baseEntity.name.contains("Chopping Board")) {
-            event.player.sendMessage("위치1 : ${baseEntity.location}")
             openCookingInventory(event.player, baseEntity.location)
         }
     }
 
     fun openCookingInventory(player: Player, location: Location) {
-        player.sendMessage("pos0 : $location")
         if (activeCookings.containsKey(location)) {
             return
         }
-
-        player.sendMessage("pos1 : $location")
 
         val title = Component.text("요리하기")
         val inventory = Bukkit.createInventory(null, 54, title)
@@ -52,9 +46,7 @@ class Cooking(private val plugin: Plugin) : Listener {
         inventory.setItem(53, buttonItem)
 
         player.openInventory(inventory)
-        player.sendMessage("pos2 : $location")
         inventoryMap[inventory] = location
-        player.sendMessage("pos3 : ${inventoryMap[inventory]}")
     }
 
     @EventHandler
@@ -63,8 +55,6 @@ class Cooking(private val plugin: Plugin) : Listener {
         val location = inventoryMap[inventory] ?: return
         val player = event.whoClicked as Player
         val clickedSlot = event.rawSlot
-
-        player.sendMessage("실제 위치 : $location")
 
         if (clickedSlot == 52 || clickedSlot == 53) {
             event.isCancelled = true
@@ -78,6 +68,7 @@ class Cooking(private val plugin: Plugin) : Listener {
             if (result != null) {
                 val cookingCompletenessGauge = CookingCompletenessGauge(player, result, location) {
                     activeCookings.remove(location)
+                    player.sendMessage("activeCookings.remove(location) 1")
                 }
                 activeCookings[location] = cookingCompletenessGauge
                 Bukkit.getPluginManager().registerEvents(cookingCompletenessGauge, plugin)

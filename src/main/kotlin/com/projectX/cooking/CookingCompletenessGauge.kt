@@ -25,7 +25,7 @@ class CookingCompletenessGauge(
     private val onFinish: () -> Unit
 ) : BukkitRunnable(), Listener {
 
-    private val barLength = 30
+    private val barLength = 20
     private var cursorPosition = 0
     private var stopped = false
     private var stopTickCounter = 0
@@ -35,11 +35,12 @@ class CookingCompletenessGauge(
     private lateinit var gaugeStand: ArmorStand
 
     private fun spawnGaugeStand() {
-        gaugeStand = location.world.spawn(location.clone().add(0.0, 0.3, 0.0),
+        gaugeStand = location.world.spawn(location.clone().add(0.0, -0.0, 0.0),
             ArmorStand::class.java).apply {
             isVisible = false
             setGravity(false)
             isMarker = false
+            isSmall = true
             isCustomNameVisible = true
         }
     }
@@ -55,7 +56,7 @@ class CookingCompletenessGauge(
         }
 
         if (stopped) {
-            if (keepShowingGauge && stopTickCounter < 40) {
+            if (keepShowingGauge && stopTickCounter < 10) {
                 updateGaugeStand(cursorPosition)
                 stopTickCounter++
                 return
@@ -87,11 +88,10 @@ class CookingCompletenessGauge(
 
         for (i in 0 until barLength) {
             val baseColor = when (i) {
-                in 0..11 -> NamedTextColor.RED
-                in 12..20 -> NamedTextColor.GOLD
-                in 21..25 -> NamedTextColor.YELLOW
-                in 26..27 -> NamedTextColor.GREEN
-                in 28..29 -> NamedTextColor.DARK_GREEN
+                in 0..9 -> NamedTextColor.RED
+                in 10..13 -> NamedTextColor.GOLD
+                in 14..16 -> NamedTextColor.YELLOW
+                in 17..19 -> NamedTextColor.DARK_GREEN
                 else -> NamedTextColor.GRAY
             }
 
@@ -106,11 +106,10 @@ class CookingCompletenessGauge(
         stopped = true
         keepShowingGauge = true
         val score = when (position) {
-            in 0..11 -> 30
-            in 12..20 -> 50
-            in 21..25 -> 70
-            in 26..28 -> 85
-            29 -> 100
+            in 0..9 -> 50
+            in 10..13 -> 70
+            in 14..16 -> 85
+            in 17..19 -> 100
             else -> 0
         }
 
@@ -136,13 +135,14 @@ class CookingCompletenessGauge(
         player.sendMessage("완성도 $score% 요리가 완성되었습니다!")
         player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1f, 1f)
         player.inventory.addItem(result)
-        gaugeStand.remove()
-        onFinish()
     }
 
     @EventHandler
     fun onPlayerInteract(event: PlayerInteractEvent) {
-        if (event.player == player && !stopped && event.action.isRightClick) {
+        if (event.player != player || stopped || !event.action.isRightClick) return
+        val clicked = event.clickedBlock ?: return
+
+        if (clicked.location == location.block.location) {
             stopCooking(cursorPosition)
         }
     }
